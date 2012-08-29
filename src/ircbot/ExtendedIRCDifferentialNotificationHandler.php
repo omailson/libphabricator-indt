@@ -58,40 +58,55 @@ final class ExtendedIRCDifferentialNotificationHandler
         $names[] = $handle->getName();
       }
 
-      $actor_name = $actor_handle[$actor_phid]->getName();
-      $message = "revision D".$data['revision_id']." updated [".self::getAction($data['action'])."] - ".PhabricatorEnv::getEnvConfig('phabricator.base-uri')."D".$data['revision_id'];
-      if (!empty($names)) {
-        $highlight = implode(", ", $names);
-        $message = $highlight.": ".$message;
+      // Set message and recipients
+      if ($data['action'] == DifferentialAction::ACTION_CREATE) {
+        $message = "check out this new revison: ".$this->printRevision($data['revision_id']);
+        $recipients = $this->getConfig('notification.channels');
+
+        if (!empty($names)) {
+          $highlight = implode(", ", $names);
+          $message = $highlight.": ".$message;
+        }
+      } else {
+        $actor_name = $actor_handle[$actor_phid]->getName();
+        $verb = DifferentialAction::getActionPastTenseVerb($data['action']);
+        $message = "${actor_name} ${verb} revision ".$this->printRevision($data['revision_id']);
+
+        // We already have the message. Let's see who wants to read that.
+        switch ($data['action']) {
+        case DifferentialAction::ACTION_COMMENT:
+        case DifferentialAction::ACTION_UPDATE:
+          // EVERYONE!
+          $recipients = $names;
+          break;
+        case DifferentialAction::ACTION_ACCEPT:
+        case DifferentialAction::ACTION_REJECT:
+        case DifferentialAction::ACTION_RETHINK:
+          // Only to the author of the revision
+          $author = $handles[$data['revision_author_phid']];
+          $recipients = array($author->getName());
+          break;
+        default:
+          // Don't send message to anyone
+          $recipients = array();
+          break;
+        }
       }
 
-      foreach ($this->getConfig('notification.channels') as $channel) {
-        $this->write('PRIVMSG', "{$channel} :{$message}");
+      foreach ($recipients as $recipient) {
+        $this->write('PRIVMSG', "{$recipient} :{$message}");
       }
     }
   }
 
-  private static function getAction($action) {
-    $actions = array(
-      DifferentialAction::ACTION_COMMENT        => 'comment',
-      DifferentialAction::ACTION_ACCEPT         => 'accepted',
-      DifferentialAction::ACTION_REJECT         => 'request changes',
-      DifferentialAction::ACTION_RETHINK        => 'plan changes',
-      DifferentialAction::ACTION_ABANDON        => 'abandoned',
-      DifferentialAction::ACTION_CLOSE          => 'closed',
-      DifferentialAction::ACTION_REQUEST        => 'request review',
-      DifferentialAction::ACTION_RECLAIM        => 'reclaimed',
-      DifferentialAction::ACTION_UPDATE         => 'updated',
-      DifferentialAction::ACTION_RESIGN         => 'reviewer--',
-      DifferentialAction::ACTION_SUMMARIZE      => 'summarized',
-      DifferentialAction::ACTION_TESTPLAN       => 'test plan',
-      DifferentialAction::ACTION_CREATE         => 'created',
-      DifferentialAction::ACTION_ADDREVIEWERS   => 'reviewer++',
-      DifferentialAction::ACTION_ADDCCS         => 'add CC',
-      DifferentialAction::ACTION_CLAIM          => 'claim',
-    );
-
-    return $actions[$action];
+  private function printRevision($revision_id) {
+    $revisions = $this->getConduit()->callMethodSynchronous(
+      'differential.query',
+      array(
+        'query' => 'revision-ids',
+        'ids'   => array($revision_id),
+      ));
+    $revision = $revisions[0];
+    return "D".$revision_id.": ".$revision['title']." - ".$revision['uri'];
   }
-
 }
