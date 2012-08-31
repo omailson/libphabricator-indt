@@ -76,12 +76,12 @@ final class ExtendedIRCDifferentialNotificationHandler
         switch ($data['action']) {
         case DifferentialAction::ACTION_COMMENT:
         case DifferentialAction::ACTION_UPDATE:
+        case DifferentialAction::ACTION_RETHINK:
           // EVERYONE!
           $recipients = $names;
           break;
         case DifferentialAction::ACTION_ACCEPT:
         case DifferentialAction::ACTION_REJECT:
-        case DifferentialAction::ACTION_RETHINK:
           // Only to the author of the revision
           $author = $handles[$data['revision_author_phid']];
           $recipients = array($author->getName());
