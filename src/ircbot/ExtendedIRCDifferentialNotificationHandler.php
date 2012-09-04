@@ -46,18 +46,26 @@ final class ExtendedIRCDifferentialNotificationHandler
       // Load object handles
       $phids = $revision->getReviewers();
       $phids = array_merge($phids, array($actor_phid, $author_phid));
+      $phids[] = $revision->getArcanistProjectPHID();
       $handles = id(new PhabricatorObjectHandleData($phids))->loadHandles();
 
       // Users to notify
       foreach ($handles as $phid => $handle) {
-        if ($phid != $actor_phid)
+        if ($handle->getType() == PhabricatorPHIDConstants::PHID_TYPE_USER && $phid != $actor_phid)
           $usernames[] = $handle->getName();
       }
 
       // Set message and recipients
+      $message = "";
+      $recipients = array();
       if ($data['action'] == DifferentialAction::ACTION_CREATE) {
         $message = "check out this new revison: ".$this->printRevision($data['revision_id']);
-        $recipients = $this->getConfig('notification.channels');
+
+        // Channel that receives notifications from this project
+        $project_name = $handles[$revision->getArcanistProjectPHID()]->getName();
+        $projects = $this->getConfig('notification.projects');
+        if (isset($projects[$project_name]))
+            $recipients = array($projects[$project_name]);
 
         if (!empty($usernames)) {
           $highlight = implode(", ", $usernames);
