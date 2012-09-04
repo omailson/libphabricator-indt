@@ -1,12 +1,10 @@
 <?php
 /**
- * Notify on IRC channel the people involved in the revision.
+ * Notify on IRC the people involved in the revision.
  *
- * This irc bot tracks changes made to revisions and sends a message to the
- * channel when a new change occurs.
- * The message notifies each reviewer and the author of the review, unless 
- * that person was the one who performed the change. 
- * There's no need to notify who did the change.
+ * This irc bot tracks changes made to revisions and notifies each reviewer and
+ * the author of the review, unless that person was the one who performed the
+ * change.
  *
  * @group irc
  */
@@ -21,7 +19,6 @@ final class ExtendedIRCDifferentialNotificationHandler
 
   public function runBackgroundTasks() {
     $iterator = new PhabricatorTimelineIterator('ircdiffx', array('difx'));
-    $show = $this->getConfig('notification.actions');
 
     if (!$this->skippedOldEvents) {
       foreach ($iterator as $event) {
@@ -33,29 +30,28 @@ final class ExtendedIRCDifferentialNotificationHandler
 
     foreach ($iterator as $event) {
       $data = $event->getData();
-      if (!$data || ($show !== null && !in_array($data['action'], $show))) {
+      if (!$data) {
         continue;
       }
 
-      $actor_phid = $data['actor_phid'];
       $revision_phid = $data['revision_phid'];
+      $actor_phid = $data['actor_phid'];
+      $author_phid = $data['revision_author_phid'];
 
-      $actor_handle = id(new PhabricatorObjectHandleData(array($actor_phid)))->loadHandles();
-
+      // Load revision
       $objects = id(new PhabricatorObjectHandleData(array($revision_phid)))->loadObjects();
       $revision = $objects[$revision_phid];
       $revision->loadRelationships();
 
-      // Add reviewers
+      // Load object handles
       $phids = $revision->getReviewers();
-      // Add revision author
-      $phids[] = $data['revision_author_phid'];
-      // Remove comment author
-      $phids = array_diff($phids, array($actor_phid));
-
+      $phids = array_merge($phids, array($actor_phid, $author_phid));
       $handles = id(new PhabricatorObjectHandleData($phids))->loadHandles();
-      foreach ($handles as $key => $handle) {
-        $names[] = $handle->getName();
+
+      // Users to notify
+      foreach ($handles as $phid => $handle) {
+        if ($phid != $actor_phid)
+          $usernames[] = $handle->getName();
       }
 
       // Set message and recipients
@@ -63,12 +59,12 @@ final class ExtendedIRCDifferentialNotificationHandler
         $message = "check out this new revison: ".$this->printRevision($data['revision_id']);
         $recipients = $this->getConfig('notification.channels');
 
-        if (!empty($names)) {
-          $highlight = implode(", ", $names);
+        if (!empty($usernames)) {
+          $highlight = implode(", ", $usernames);
           $message = $highlight.": ".$message;
         }
       } else {
-        $actor_name = $actor_handle[$actor_phid]->getName();
+        $actor_name = $handles[$actor_phid]->getName();
         $verb = DifferentialAction::getActionPastTenseVerb($data['action']);
         $message = "${actor_name} ${verb} revision ".$this->printRevision($data['revision_id']);
 
@@ -78,12 +74,12 @@ final class ExtendedIRCDifferentialNotificationHandler
         case DifferentialAction::ACTION_UPDATE:
         case DifferentialAction::ACTION_RETHINK:
           // EVERYONE!
-          $recipients = $names;
+          $recipients = $usernames;
           break;
         case DifferentialAction::ACTION_ACCEPT:
         case DifferentialAction::ACTION_REJECT:
           // Only to the author of the revision
-          $author = $handles[$data['revision_author_phid']];
+          $author = $handles[$author_phid];
           $recipients = array($author->getName());
           break;
         default:
