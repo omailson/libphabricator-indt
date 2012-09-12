@@ -10,6 +10,7 @@ phutil_register_library_map(array(
   '__library_version__' => 2,
   'class' =>
   array(
+    'ConduitAPI_differential_getcommitdata_Method' => 'conduit/ConduitAPI_differential_getcommitdata_Method.php',
     'ExtendedIRCDifferentialNotificationHandler' => 'ircbot/ExtendedIRCDifferentialNotificationHandler.php',
   ),
   'function' =>
@@ -17,6 +18,7 @@ phutil_register_library_map(array(
   ),
   'xmap' =>
   array(
+    'ConduitAPI_differential_getcommitdata_Method' => 'ConduitAPIMethod',
     'ExtendedIRCDifferentialNotificationHandler' => 'PhabricatorIRCHandler',
   ),
 ));
