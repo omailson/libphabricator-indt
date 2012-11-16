@@ -58,23 +58,25 @@ final class ExtendedIRCDifferentialNotificationHandler
       // Set message and recipients
       $message = "";
       $recipients = array();
+      $project_name = $handles[$revision->getArcanistProjectPHID()]->getName();
       if ($data['action'] == DifferentialAction::ACTION_CREATE) {
-        $message = "check out this new revison: ".$this->printRevision($data['revision_id']);
+        // chr(2) -> bold text
+        $message = chr(2)."[{$project_name}]".chr(2)." new revision: ".$this->printRevision($data['revision_id']);
 
         // Channel that receives notifications from this project
-        $project_name = $handles[$revision->getArcanistProjectPHID()]->getName();
         $projects = $this->getConfig('notification.projects');
         if (isset($projects[$project_name]))
             $recipients = array($projects[$project_name]);
 
         if (!empty($usernames)) {
           $highlight = implode(", ", $usernames);
-          $message = $highlight.": ".$message;
+          $message = "{$message} ({$highlight})";
         }
       } else {
         $actor_name = $handles[$actor_phid]->getName();
+        $author_name = $handles[$author_phid]->getName();
         $verb = DifferentialAction::getActionPastTenseVerb($data['action']);
-        $message = "${actor_name} ${verb} revision ".$this->printRevision($data['revision_id']);
+        $message = chr(2)."[{$project_name}]".chr(2)." ${actor_name} ${verb} revision ".$this->printRevision($data['revision_id'])." ($author_name)";
 
         // We already have the message. Let's see who wants to read that.
         switch ($data['action']) {
