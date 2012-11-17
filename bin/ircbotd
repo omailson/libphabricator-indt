@@ -1,0 +1,40 @@
+#!/bin/bash
+#
+# Start/Stop the phabricator bot daemon
+# A configuration file must be provided in $PHABRICATOR_BOT
+#
+
+case "$1" in
+	start)
+		if [ -z "$PHABRICATOR_BOT" ]
+		then
+			echo "Couldn't start phabricator bot. You need to set the bot configuration file to \$PHABRICATOR_BOT"
+			exit 1
+		fi
+
+		if [ ! -f "$PHABRICATOR_BOT" ]
+		then
+			echo "Can't find file $PHABRICATOR_BOT. Have you tried the absolute path?"
+			echo "Aborting..."
+			exit 1
+		fi
+
+		phd launch ircbot "$PHABRICATOR_BOT"
+		;;
+
+	stop)
+		pid=$(phd status | grep PhabricatorIRCBot | cut -d $'\t' -f 1 | tr -d ' ')
+		if [ -z "$pid" ]
+		then
+			echo "Bot not started"
+			exit 1
+		fi
+
+		phd stop $pid
+		;;
+
+	restart)
+		$0 stop
+		$0 start
+		;;
+esac
