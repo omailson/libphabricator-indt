@@ -109,7 +109,6 @@ final class ExtendedIRCDifferentialNotificationHandler
     $revisions = $this->getConduit()->callMethodSynchronous(
       'differential.query',
       array(
-        'query' => 'revision-ids',
         'ids'   => array($revision_id),
       ));
     $revision = $revisions[0];
