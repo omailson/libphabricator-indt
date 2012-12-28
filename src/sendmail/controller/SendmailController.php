@@ -44,7 +44,7 @@ class SendmailController extends PhabricatorController {
       $mail->setSubject($subject);
       $mail->setBody($body);
       $mail->setFrom($request->getUser()->getPHID());
-      // $mail->save(); TODO
+      $mail->save();
 
       $dialog = id(new AphrontDialogView())
         ->setUser($loggedUser)
