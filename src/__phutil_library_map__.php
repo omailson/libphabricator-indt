@@ -23,7 +23,7 @@ phutil_register_library_map(array(
   'xmap' =>
   array(
     'ConduitAPI_differential_getcommitdata_Method' => 'ConduitAPIMethod',
-    'ExtendedIRCDifferentialNotificationHandler' => 'PhabricatorIRCHandler',
+    'ExtendedIRCDifferentialNotificationHandler' => 'PhabricatorBotHandler',
     'PhabricatorApplicationRegister' => 'PhabricatorApplication',
     'PhabricatorApplicationSendmail' => 'PhabricatorApplication',
     'RegisterController' => 'PhabricatorController',
