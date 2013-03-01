@@ -19,11 +19,11 @@ case "$1" in
 			exit 1
 		fi
 
-		phd launch ircbot "$PHABRICATOR_BOT"
+		phd launch phabricatorbot "$PHABRICATOR_BOT"
 		;;
 
 	stop)
-		pid=$(phd status | grep PhabricatorIRCBot | cut -d $'\t' -f 1 | tr -d ' ')
+		pid=$(phd status | grep PhabricatorBot | cut -d $'\t' -f 1 | tr -d ' ')
 		if [ -z "$pid" ]
 		then
 			echo "Bot not started"
