@@ -59,7 +59,9 @@ final class ConduitAPI_differential_getcommitdata_Method
       $aux_phids[$field_key] = $field->getRequiredHandlePHIDsForCommitMessage();
     }
     $handles_phids = array_unique(array_mergev($aux_phids));
-    $handles = id(new PhabricatorObjectHandleData($handles_phids))->loadHandles();
+    $handles = id(new PhabricatorObjectHandleData($handles_phids))
+        ->setViewer($request->getUser())
+        ->loadHandles();
     foreach ($aux_fields as $field_key => $field) {
       $field->setHandles(array_select_keys($handles, $aux_phids[$field_key]));
     }
@@ -83,7 +85,9 @@ final class ConduitAPI_differential_getcommitdata_Method
     $phids = $revision->getReviewers();
     $phids[] = $author_phid;
     $phids[] = $reviewed_by_phid;
-    $objects = id(new PhabricatorObjectHandleData($phids))->loadObjects();
+    $objects = id(new PhabricatorObjectHandleData($phids))
+        ->setViewer($request->getUser())
+        ->loadObjects();
 
     // For user's fields, get name, username and e-mail
     $data['author'] = null;

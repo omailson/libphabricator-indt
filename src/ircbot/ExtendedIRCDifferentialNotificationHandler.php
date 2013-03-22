@@ -84,8 +84,13 @@ final class ExtendedIRCDifferentialNotificationHandler
         $actor_phid = $data['actor_phid'];
         $author_phid = $data['revision_author_phid'];
 
+        $conduit_user = id(new PhabricatorUser())
+            ->loadOneWhere('username = %s', $this->getConfig('conduit.user'));
+
         // Load revision
-        $objects = id(new PhabricatorObjectHandleData(array($revision_phid)))->loadObjects();
+        $objects = id(new PhabricatorObjectHandleData(array($revision_phid)))
+            ->setViewer($conduit_user)
+            ->loadObjects();
         $revision = $objects[$revision_phid];
         $revision->loadRelationships();
 
@@ -93,7 +98,9 @@ final class ExtendedIRCDifferentialNotificationHandler
         $phids = $revision->getReviewers();
         $phids = array_merge($phids, array($actor_phid, $author_phid));
         $phids[] = $revision->getArcanistProjectPHID();
-        $handles = id(new PhabricatorObjectHandleData($phids))->loadHandles();
+        $handles = id(new PhabricatorObjectHandleData($phids))
+            ->setViewer($conduit_user)
+            ->loadHandles();
 
         // Users to notify
         foreach ($handles as $phid => $handle) {
