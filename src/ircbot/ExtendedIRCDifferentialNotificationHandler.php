@@ -13,7 +13,6 @@ final class ExtendedIRCDifferentialNotificationHandler
 
   private $startupDelay = 30;
   private $lastSeenChronoKey = 0;
-  // private $skippedOldEvents;
 
   public function receiveMessage(PhabricatorBotMessage $message) {
     return;
