@@ -5,7 +5,7 @@
 #
 
 case "$1" in
-	start)
+	start|debug)
 		if [ -z "$PHABRICATOR_BOT" ]
 		then
 			echo "Couldn't start phabricator bot. You need to set the bot configuration file to \$PHABRICATOR_BOT"
@@ -19,7 +19,13 @@ case "$1" in
 			exit 1
 		fi
 
-		phd launch phabricatorbot "$PHABRICATOR_BOT"
+		if [ "$1" = "debug" ]
+		then
+			phd debug phabricatorbot "$PHABRICATOR_BOT"
+		else
+			phd launch phabricatorbot "$PHABRICATOR_BOT"
+		fi
+
 		;;
 
 	stop)
