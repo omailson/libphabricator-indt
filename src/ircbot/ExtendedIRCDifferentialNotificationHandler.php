@@ -8,7 +8,7 @@
  *
  * @group irc
  */
-final class ExtendedIRCDifferentialNotificationHandler
+class ExtendedIRCDifferentialNotificationHandler
   extends PhabricatorBotHandler {
 
   private $startupDelay = 30;
@@ -16,6 +16,42 @@ final class ExtendedIRCDifferentialNotificationHandler
 
   public function receiveMessage(PhabricatorBotMessage $message) {
     return;
+  }
+
+  public function sendMessage(DifferentialRevision $revision, $recipients, $data) {
+    $project = $data['project'];
+
+    $message = "";
+    $project_name = $project->getName();
+    if ($data['action'] === DifferentialAction::ACTION_CREATE) {
+      // chr(2) -> bold text
+      $message = chr(2)."[{$project_name}]".chr(2)." new revision: ".$this->printRevision($data['revision_id']);
+
+      $usernames = array();
+      $channels = array();
+      foreach ($data['reviewers'] as $reviewer) {
+        $usernames[] = $reviewer->getName();
+      }
+
+      if (!empty($usernames)) {
+        $highlight = implode(", ", $usernames);
+        $message = "{$message} ({$highlight})";
+      }
+    } else {
+      $actor_name = $data['actor']->getName();
+      $author_name = $data['author']->getName();
+      $verb = DifferentialAction::getActionPastTenseVerb($data['action']);
+      $message = chr(2)."[{$project_name}]".chr(2)." ${actor_name} ${verb} revision ".$this->printRevision($data['revision_id'])." ($author_name)";
+    }
+
+    foreach ($recipients as $recipient) {
+      $this->writeMessage(
+        id(new PhabricatorBotMessage())
+        ->setCommand('MESSAGE')
+        ->setTarget($recipient)
+        ->setBody($message)
+      );
+    }
   }
 
   public function runBackgroundTasks() {
@@ -102,73 +138,48 @@ final class ExtendedIRCDifferentialNotificationHandler
             ->setViewer($conduit_user)
             ->loadHandles();
 
-        // Users to notify
-        foreach ($handles as $phid => $handle) {
-          if ($handle->getType() == PhabricatorPHIDConstants::PHID_TYPE_USER && $phid != $actor_phid)
-            $usernames[] = $handle->getName();
+        $data['actor'] = $handles[$actor_phid];
+        $data['author'] = $handles[$author_phid];
+        $data['project'] = $handles[$revision->getArcanistProjectPHID()];
+        $data['reviewers'] = array();
+        foreach ($revision->getReviewers() as $phid) {
+          $data['reviewers'][] = $handles[$phid];
         }
 
-        // Set message and recipients
-        $message = "";
-        $recipients = array();
-        $project_name = $handles[$revision->getArcanistProjectPHID()]->getName();
-        if ($data['action'] == DifferentialAction::ACTION_CREATE) {
-          // chr(2) -> bold text
-          $message = chr(2)."[{$project_name}]".chr(2)." new revision: ".$this->printRevision($data['revision_id']);
-
+        // Users to notify
+        $targets = array();
+        switch ($data['action']) {
+        case DifferentialAction::ACTION_CREATE:
           // Channel that receives notifications from this project
           $projects = $this->getConfig('notification.projects');
+          $project_name = $data['project']->getName();
           if (isset($projects[$project_name])) {
-            $channel = id(new PhabricatorBotChannel())
+            $targets[] = id(new PhabricatorBotChannel())
               ->setName($projects[$project_name]);
-            $recipients = array($channel);
+          }
+          break;
+        case DifferentialAction::ACTION_COMMENT:
+        case DifferentialAction::ACTION_UPDATE:
+        case DifferentialAction::ACTION_RETHINK:
+          foreach ($data['reviewers'] as $reviewer) {
+            $targets[] = id(new PhabricatorBotUser())
+              ->setName($reviewer->getName());
           }
 
-          if (!empty($usernames)) {
-            $highlight = implode(", ", $usernames);
-            $message = "{$message} ({$highlight})";
+          if ($author_phid !== $actor_phid) {
+            $targets[] = id(new PhabricatorBotUser())
+              ->setName($data['author']->getName());
           }
-        } else {
-          $actor_name = $handles[$actor_phid]->getName();
-          $author_name = $handles[$author_phid]->getName();
-          $verb = DifferentialAction::getActionPastTenseVerb($data['action']);
-          $message = chr(2)."[{$project_name}]".chr(2)." ${actor_name} ${verb} revision ".$this->printRevision($data['revision_id'])." ($author_name)";
-
-          // We already have the message. Let's see who wants to read that.
-          switch ($data['action']) {
-          case DifferentialAction::ACTION_COMMENT:
-          case DifferentialAction::ACTION_UPDATE:
-          case DifferentialAction::ACTION_RETHINK:
-            // EVERYONE!
-            $recipients = array();
-            foreach($usernames as $username) {
-              $recipients[] = id(new PhabricatorBotUser())
-                ->setName($username);
-            }
-            break;
-          case DifferentialAction::ACTION_ACCEPT:
-          case DifferentialAction::ACTION_REJECT:
-            // Only to the author of the revision
-            $author = $handles[$author_phid];
-            $recipient = id(new PhabricatorBotUser())
-              ->setName($author->getName());
-            $recipients = array($recipient);
-            break;
-          default:
-            // Don't send message to anyone
-            $recipients = array();
-            break;
-          }
+          break;
+        case DifferentialAction::ACTION_ACCEPT:
+        case DifferentialAction::ACTION_REJECT:
+          $targets[] = id(new PhabricatorBotUser())
+            ->setName($data['author']->getName())
+          break;
+        default:
+          break;
         }
-
-        foreach ($recipients as $recipient) {
-          $this->writeMessage(
-            id(new PhabricatorBotMessage())
-            ->setCommand('MESSAGE')
-            ->setTarget($recipient)
-            ->setBody($message)
-          );
-        }
+        $this->sendMessage($revision, $targets, $data);
       }
     }
   }
