@@ -25,6 +25,7 @@ class SendmailController extends PhabricatorController {
       }
 
       $users = id(new PhabricatorPeopleQuery())
+        ->setViewer($loggedUser)
         ->needPrimaryEmail(true)
         ->withPHIDs($member_phids) // means everyone, if this array is empty
         ->execute();
