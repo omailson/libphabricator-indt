@@ -174,7 +174,7 @@ class ExtendedIRCDifferentialNotificationHandler
         case DifferentialAction::ACTION_ACCEPT:
         case DifferentialAction::ACTION_REJECT:
           $targets[] = id(new PhabricatorBotUser())
-            ->setName($data['author']->getName())
+            ->setName($data['author']->getName());
           break;
         default:
           break;
