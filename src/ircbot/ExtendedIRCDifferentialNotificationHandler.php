@@ -8,50 +8,25 @@
  *
  * @group irc
  */
-class ExtendedIRCDifferentialNotificationHandler
+abstract class ExtendedIRCDifferentialNotificationHandler
   extends PhabricatorBotHandler {
 
   private $startupDelay = 30;
   private $lastSeenChronoKey = 0;
 
+  /**
+   * Given enought information about the revision, returns a list of
+   * PhabricatorBotTarget who the message will be delivered to
+   */
+  abstract protected function processRecipients(DifferentialRevision $revision, $data);
+
+  /**
+   * Given enough information about the revision, return the message to send to the recipients
+   */
+  abstract protected function processMessage(DifferentialRevision $revision, $data);
+
   public function receiveMessage(PhabricatorBotMessage $message) {
     return;
-  }
-
-  public function sendMessage(DifferentialRevision $revision, $recipients, $data) {
-    $project = $data['project'];
-
-    $message = "";
-    $project_name = $project->getName();
-    if ($data['action'] === DifferentialAction::ACTION_CREATE) {
-      // chr(2) -> bold text
-      $message = chr(2)."[{$project_name}]".chr(2)." new revision: ".$this->printRevision($data['revision_id']);
-
-      $usernames = array();
-      $channels = array();
-      foreach ($data['reviewers'] as $reviewer) {
-        $usernames[] = $reviewer->getName();
-      }
-
-      if (!empty($usernames)) {
-        $highlight = implode(", ", $usernames);
-        $message = "{$message} ({$highlight})";
-      }
-    } else {
-      $actor_name = $data['actor']->getName();
-      $author_name = $data['author']->getName();
-      $verb = DifferentialAction::getActionPastTenseVerb($data['action']);
-      $message = chr(2)."[{$project_name}]".chr(2)." ${actor_name} ${verb} revision ".$this->printRevision($data['revision_id'])." ($author_name)";
-    }
-
-    foreach ($recipients as $recipient) {
-      $this->writeMessage(
-        id(new PhabricatorBotMessage())
-        ->setCommand('MESSAGE')
-        ->setTarget($recipient)
-        ->setBody($message)
-      );
-    }
   }
 
   public function runBackgroundTasks() {
@@ -147,44 +122,27 @@ class ExtendedIRCDifferentialNotificationHandler
         }
 
         // Users to notify
-        $targets = array();
-        switch ($data['action']) {
-        case DifferentialAction::ACTION_CREATE:
-          // Channel that receives notifications from this project
-          $projects = $this->getConfig('notification.projects');
-          $project_name = $data['project']->getName();
-          if (isset($projects[$project_name])) {
-            $targets[] = id(new PhabricatorBotChannel())
-              ->setName($projects[$project_name]);
-          }
-          break;
-        case DifferentialAction::ACTION_COMMENT:
-        case DifferentialAction::ACTION_UPDATE:
-        case DifferentialAction::ACTION_RETHINK:
-          foreach ($data['reviewers'] as $reviewer) {
-            $targets[] = id(new PhabricatorBotUser())
-              ->setName($reviewer->getName());
-          }
+        $targets = $this->processRecipients($revision, $data);
+        // Message to send
+        $message = $this->processMessage($revision, $data);
 
-          if ($author_phid !== $actor_phid) {
-            $targets[] = id(new PhabricatorBotUser())
-              ->setName($data['author']->getName());
-          }
-          break;
-        case DifferentialAction::ACTION_ACCEPT:
-        case DifferentialAction::ACTION_REJECT:
-          $targets[] = id(new PhabricatorBotUser())
-            ->setName($data['author']->getName());
-          break;
-        default:
-          break;
+        $messages = array();
+        foreach ($targets as $target) {
+          $messages[] = id(new PhabricatorBotMessage())
+            ->setCommand('MESSAGE')
+            ->setTarget($target)
+            ->setBody($message);
         }
-        $this->sendMessage($revision, $targets, $data);
+
+        // Send messages
+        foreach ($messages as $msg) {
+          $this->writeMessage($msg);
+        }
       }
     }
   }
 
-  private function printRevision($revision_id) {
+  protected function printRevision($revision_id) {
     $revisions = $this->getConduit()->callMethodSynchronous(
       'differential.query',
       array(
