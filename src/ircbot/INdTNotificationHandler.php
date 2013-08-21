@@ -46,13 +46,15 @@ final class INdTNotificationHandler
     case DifferentialAction::ACTION_COMMENT:
     case DifferentialAction::ACTION_UPDATE:
     case DifferentialAction::ACTION_RETHINK:
-      foreach ($data['reviewers'] as $reviewer) {
-        $targets[] = id(new PhabricatorBotUser())
-          ->setName($reviewer->getName());
-      }
-
       $actor_phid = $data['actor_phid'];
       $author_phid = $data['revision_author_phid'];
+
+      foreach ($data['reviewers'] as $reviewer) {
+        if ($actor_phid !== $reviewer->getPHID())
+          $targets[] = id(new PhabricatorBotUser())
+            ->setName($reviewer->getName());
+      }
+
       if ($author_phid !== $actor_phid) {
         $targets[] = id(new PhabricatorBotUser())
           ->setName($data['author']->getName());
