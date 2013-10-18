@@ -99,19 +99,20 @@ abstract class ExtendedIRCDifferentialNotificationHandler
             ->loadOneWhere('username = %s', $this->getConfig('conduit.user'));
 
         // Load revision
-        $objects = id(new PhabricatorObjectHandleData(array($revision_phid)))
+        $revision = id(new DifferentialRevisionQuery())
             ->setViewer($conduit_user)
-            ->loadObjects();
-        $revision = $objects[$revision_phid];
-        $revision->loadRelationships();
+            ->withPHIDs(array($revision_phid))
+            ->needRelationships(true)
+            ->executeOne();
 
         // Load object handles
         $phids = $revision->getReviewers();
         $phids = array_merge($phids, array($actor_phid, $author_phid));
         $phids[] = $revision->getArcanistProjectPHID();
-        $handles = id(new PhabricatorObjectHandleData($phids))
+        $handles = id(new PhabricatorHandleQuery())
             ->setViewer($conduit_user)
-            ->loadHandles();
+            ->withPHIDs($phids)
+            ->execute();
 
         $data['actor'] = $handles[$actor_phid];
         $data['author'] = $handles[$author_phid];
