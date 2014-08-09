@@ -3,6 +3,10 @@
 final class ConduitAPI_differential_getcommitdata_Method
   extends ConduitAPIMethod {
 
+  public function getAPIMethodName() {
+    return 'differential.getcommitdata';
+  }
+
   public function getMethodDescription() {
     return "Retrieve Differential data to use on a custom commit message";
   }
