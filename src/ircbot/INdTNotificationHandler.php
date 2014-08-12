@@ -24,7 +24,7 @@ final class INdTNotificationHandler
     } else {
       $actor_name = $data['actor']->getName();
       $author_name = $data['author']->getName();
-      $verb = DifferentialAction::getActionPastTenseVerb($data['action']);
+      $verb = $this->getActionPastTenseVerb($data['action']);
       $message = chr(2)."[{$project_name}]".chr(2)." ${actor_name} ${verb} revision ".$this->printRevision($data['revision_id'])." ($author_name)";
     }
 

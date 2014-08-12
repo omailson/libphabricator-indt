@@ -29,6 +29,16 @@ abstract class ExtendedIRCDifferentialNotificationHandler
     return;
   }
 
+  private function shouldShowStory($story) {
+    $story_objectphid = $story['objectPHID'];
+    $obj_type = phid_get_type($story_objectphid);
+
+    if ($obj_type === 'DREV')
+      return true;
+
+    return false;
+  }
+
   public function runBackgroundTasks() {
     if ($this->startupDelay > 0) {
         // the event loop runs every 1s so delay enough to fully conenct
@@ -68,7 +78,7 @@ abstract class ExtendedIRCDifferentialNotificationHandler
         array(
           'limit'=>$config_page_size,
           'after'=>$chrono_key_cursor,
-          'view'=>'data'
+          'view'=>'text'
         ));
 
       foreach ($stories as $story) {
@@ -86,14 +96,13 @@ abstract class ExtendedIRCDifferentialNotificationHandler
           $chrono_key_cursor = $story['chronologicalKey'];
         }
 
-        $data = $story['data'];
-        if (!$data || $story['class'] !== "PhabricatorFeedStoryDifferential") {
+        if (!$story['text'] ||
+            !$this->shouldShowStory($story)) {
           continue;
         }
 
-        $revision_phid = $data['revision_phid'];
-        $actor_phid = $data['actor_phid'];
-        $author_phid = $data['revision_author_phid'];
+        $revision_phid = $story['objectPHID'];
+        $actor_phid = $story['authorPHID'];
 
         $conduit_user = id(new PhabricatorUser())
             ->loadOneWhere('username = %s', $this->getConfig('conduit.user'));
@@ -106,6 +115,7 @@ abstract class ExtendedIRCDifferentialNotificationHandler
             ->executeOne();
 
         // Load object handles
+        $author_phid = $revision->getAuthorPHID();
         $phids = $revision->getReviewers();
         $phids = array_merge($phids, array($actor_phid, $author_phid));
         $phids[] = $revision->getArcanistProjectPHID();
@@ -114,9 +124,14 @@ abstract class ExtendedIRCDifferentialNotificationHandler
             ->withPHIDs($phids)
             ->execute();
 
+        $data = array();
         $data['actor'] = $handles[$actor_phid];
+        $data['actor_phid'] = $actor_phid;
         $data['author'] = $handles[$author_phid];
+        $data['revision_author_phid'] = $author_phid;
         $data['project'] = $handles[$revision->getArcanistProjectPHID()];
+        $data['action'] = $this->parseAction($story);
+        $data['revision_id'] = $revision->getId();
         $data['reviewers'] = array();
         foreach ($revision->getReviewers() as $phid) {
           $data['reviewers'][] = $handles[$phid];
@@ -140,6 +155,71 @@ abstract class ExtendedIRCDifferentialNotificationHandler
           $this->writeMessage($msg);
         }
       }
+    }
+  }
+
+  protected function getActionPastTenseVerb($action) {
+    $verbs = array(
+      DifferentialAction::ACTION_COMMENT        => 'commented on',
+      DifferentialAction::ACTION_ACCEPT         => 'accepted',
+      DifferentialAction::ACTION_REJECT         => 'requested changes to',
+      DifferentialAction::ACTION_RETHINK        => 'planned changes to',
+      DifferentialAction::ACTION_ABANDON        => 'abandoned',
+      DifferentialAction::ACTION_CLOSE          => 'closed',
+      DifferentialAction::ACTION_REQUEST        => 'requested a review of',
+      DifferentialAction::ACTION_RECLAIM        => 'reclaimed',
+      DifferentialAction::ACTION_UPDATE         => 'updated',
+      DifferentialAction::ACTION_RESIGN         => 'resigned from',
+      DifferentialAction::ACTION_SUMMARIZE      => 'summarized',
+      DifferentialAction::ACTION_TESTPLAN       => 'explained the test plan for',
+      DifferentialAction::ACTION_CREATE         => 'created',
+      DifferentialAction::ACTION_ADDREVIEWERS   => 'added reviewers to',
+      DifferentialAction::ACTION_ADDCCS         => 'added CCs to',
+      DifferentialAction::ACTION_CLAIM          => 'commandeered',
+      DifferentialAction::ACTION_REOPEN         => 'reopened',
+      DifferentialTransaction::TYPE_INLINE      => 'commented on',
+    );
+
+    if (!empty($verbs[$action])) {
+      return $verbs[$action];
+    } else {
+      return 'brazenly "'.$action.'ed"';
+    }
+  }
+
+  private function parseAction($story) {
+    // See (in that order):
+    // DifferentialTransaction::getTitleForFeed()
+    // PhabricatorApplicationTransaction::getTitleForFeed()
+    // PhabricatorApplicationTransaction::getTitle()
+    $story_text = $story['text'];
+    $patterns = array(
+      DifferentialAction::ACTION_COMMENT        => '/^\w+ added a comment to/',
+      DifferentialAction::ACTION_ACCEPT         => '/^\w+ accepted/',
+      DifferentialAction::ACTION_REJECT         => '/^\w+ requested changes to/',
+      DifferentialAction::ACTION_RETHINK        => '/^\w+ planned changes to/',
+      DifferentialAction::ACTION_ABANDON        => '/^\w+ abandoned/',
+      DifferentialAction::ACTION_CLOSE          => '/^\w+ closed/',
+      DifferentialAction::ACTION_REQUEST        => '/^\w+ requested review of/',
+      DifferentialAction::ACTION_RECLAIM        => '/^\w+ reclaimed/',
+
+      DifferentialAction::ACTION_RESIGN         => '/^\w+ resigned from/',
+      DifferentialAction::ACTION_SUMMARIZE      => '/^\w+ summarized/', // XXX
+      DifferentialAction::ACTION_TESTPLAN       => '/^\w+ updated the test plan for/',
+      DifferentialAction::ACTION_CREATE         => '/^\w+ created/',
+      DifferentialAction::ACTION_ADDREVIEWERS   => '/^\w+ updated reviewers of/',
+      DifferentialAction::ACTION_ADDCCS         => '/^\w+ updated subscribers of/',
+
+      DifferentialAction::ACTION_UPDATE         => '/^\w+ updated/', // Put after all other updates
+
+      DifferentialAction::ACTION_CLAIM          => '/^\w+ commandeered/',
+      DifferentialAction::ACTION_REOPEN         => '/^\w+ reopened/', // XXX
+      DifferentialTransaction::TYPE_INLINE      => '/^\w+ commented on/', // XXX
+    );
+
+    foreach ($patterns as $key => $pattern) {
+      if (preg_match($pattern, $story_text))
+        return $key;
     }
   }
 
