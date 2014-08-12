@@ -29,72 +29,101 @@ final class ConduitAPI_differential_getcommitdata_Method
 
   protected function execute(ConduitAPIRequest $request) {
     $id = $request->getValue('revision_id');
+    $viewer = $request->getUser();
 
-    $revision = id(new DifferentialRevision())->load($id);
+    $revision = id(new DifferentialRevisionQuery())
+      ->withIDs(array($id))
+      ->setViewer($viewer)
+      ->needRelationships(true)
+      ->needReviewerStatus(true)
+      ->executeOne();
     if (!$revision) {
       throw new ConduitException('ERR_NOT_FOUND');
     }
 
-    $revision->loadRelationships();
+    // Get fields for DifferentialRevision
+    $field_list = PhabricatorCustomField::getObjectFields($revision,
+      DifferentialCustomField::ROLE_COMMITMESSAGE);
 
-    // Get differential fields
-    $aux_fields = DifferentialFieldSelector::newSelector()
-      ->getFieldSpecifications();
-
-    // Remove fields that should not appear on commit messages
-    foreach ($aux_fields as $key => $aux_field) {
-      $aux_field->setRevision($revision);
-      if (!$aux_field->shouldAppearOnCommitMessage()) {
-        unset($aux_fields[$key]);
-      }
-    }
-
-    // Get data from fields that uses storage (from getcommitmessage)
-    $aux_fields = DifferentialAuxiliaryField::loadFromStorage(
-      $revision,
-      $aux_fields);
+    // Populate fields with revision data
+    $field_list
+      ->setViewer($viewer)
+      ->readFieldsFromStorage($revision);
 
     // Transform array to a hash map
-    $aux_fields = mpull($aux_fields, null, 'getCommitMessageKey');
+    $field_map = mpull($field_list->getFields(), null, 'getFieldKeyForConduit');
 
     // Load handles and get data from some fields (from getcommitmessage)
-    $aux_phids = array();
-    foreach ($aux_fields as $field_key => $field) {
-      $aux_phids[$field_key] = $field->getRequiredHandlePHIDsForCommitMessage();
+    $phids = array();
+    foreach ($field_list->getFields() as $key => $field) {
+      $field_phids = $field->getRequiredHandlePHIDsForCommitMessage();
+      // I don't know how to handle this error. This code was copied from getcommitmessage
+      if (!is_array($field_phids)) {
+        throw new Exception(
+          pht(
+            'An error occured. Something may have changed in the API. '.
+            'See getcommitmessage for more'));
+      }
+      $phids[$key] = $field_phids;
     }
-    $handles_phids = array_unique(array_mergev($aux_phids));
-    $handles = id(new PhabricatorHandleQuery())
-        ->setViewer($request->getUser())
-        ->withPHIDs($handles_phids)
+    $all_phids = array_mergev($phids);
+    if ($all_phids) {
+      $all_handles = id(new PhabricatorHandleQuery())
+        ->setViewer($viewer)
+        ->withPHIDs($all_phids)
         ->execute();
-    foreach ($aux_fields as $field_key => $field) {
-      $field->setHandles(array_select_keys($handles, $aux_phids[$field_key]));
+    } else {
+      $all_handles = array();
     }
-
-
-    // Returned data
-    $data = array();
 
     // Get value for each field
-    foreach ($aux_fields as $field_key => $field) {
-      $value = $field->renderValueForCommitMessage(false);
+    $raw_data = array();
+    foreach ($field_list->getFields() as $field_key => $field) {
+      $handles = array_select_keys($all_handles, $phids[$field_key]);
+      $value = $field->renderCommitMessageValue($handles);
       if (strlen($value)) {
         $value = str_replace(array("\r\n", "\r"), array("\n", "\n"), $value);
       }
-      $data[$field_key] = $value;
+      $raw_data[$field_key] = $value;
     }
 
     // Load user objects
     $author_phid = $revision->getAuthorPHID();
-    $reviewed_by_phid = $revision->loadReviewedBy();
+    $reviewed_by_phid = "";
+    foreach ($revision->getReviewerStatus() as $rev_status) {
+      if ($rev_status->getStatus() === DifferentialReviewerStatus::STATUS_ACCEPTED ||
+        $rev_status->getStatus() === DifferentialReviewerStatus::STATUS_ACCEPTED_OLDER) {
+
+        $reviewed_by_phid = $rev_status->getReviewerPHID();
+      }
+    }
     $phids = $revision->getReviewers();
     $phids[] = $author_phid;
     $phids[] = $reviewed_by_phid;
     $objects = id(new PhabricatorPeopleQuery())
-        ->setViewer($request->getUser())
+        ->setViewer($viewer)
         ->withPHIDs($phids)
         ->needPrimaryEmail(true)
         ->execute();
+
+    // Returned data
+    $data = array();
+
+    // Remove : from keys and rename revision-id to revisionID
+    foreach ($raw_data as $key => $value) {
+      $pos = strpos($key, ':');
+      if ($pos !== false) {
+        $new_key = substr($key, $pos+1);
+      } else {
+        $new_key = $key;
+      }
+
+      if ($new_key == 'revision-id') {
+        $new_key = 'revisionID';
+      }
+
+      $data[$new_key] = $value;
+    }
 
     // For user's fields, get name, username and e-mail
     $data['author'] = null;
