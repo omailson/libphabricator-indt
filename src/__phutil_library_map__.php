@@ -9,7 +9,7 @@
 phutil_register_library_map(array(
   '__library_version__' => 2,
   'class' => array(
-    'ConduitAPI_differential_getcommitdata_Method' => 'conduit/ConduitAPI_differential_getcommitdata_Method.php',
+    'DifferentialGetCommitDataConduitAPIMethod' => 'conduit/DifferentialGetCommitDataConduitAPIMethod.php',
     'ExtendedIRCDifferentialNotificationHandler' => 'ircbot/ExtendedIRCDifferentialNotificationHandler.php',
     'INdTNotificationHandler' => 'ircbot/INdTNotificationHandler.php',
     'PhabricatorApplicationSendmail' => 'sendmail/application/PhabricatorApplicationSendmail.php',
@@ -17,7 +17,7 @@ phutil_register_library_map(array(
   ),
   'function' => array(),
   'xmap' => array(
-    'ConduitAPI_differential_getcommitdata_Method' => 'ConduitAPIMethod',
+    'DifferentialGetCommitDataConduitAPIMethod' => 'ConduitAPIMethod',
     'ExtendedIRCDifferentialNotificationHandler' => 'PhabricatorBotHandler',
     'INdTNotificationHandler' => 'ExtendedIRCDifferentialNotificationHandler',
     'PhabricatorApplicationSendmail' => 'PhabricatorApplication',
