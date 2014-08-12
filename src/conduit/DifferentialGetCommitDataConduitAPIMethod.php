@@ -1,6 +1,6 @@
 <?php
 
-final class DifferentialGetCommitDataConduitAPIMethod
+class DifferentialGetCommitDataConduitAPIMethod
   extends ConduitAPIMethod {
 
   public function getAPIMethodName() {

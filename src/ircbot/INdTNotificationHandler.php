@@ -1,5 +1,5 @@
 <?php
-final class INdTNotificationHandler
+class INdTNotificationHandler
   extends ExtendedIRCDifferentialNotificationHandler {
 
   public function processMessage(DifferentialRevision $revision, $data) {
