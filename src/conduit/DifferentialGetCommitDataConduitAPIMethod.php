@@ -89,17 +89,16 @@ class DifferentialGetCommitDataConduitAPIMethod
 
     // Load user objects
     $author_phid = $revision->getAuthorPHID();
-    $reviewed_by_phid = "";
+    $reviewed_by_phids = array();
     foreach ($revision->getReviewerStatus() as $rev_status) {
       if ($rev_status->getStatus() === DifferentialReviewerStatus::STATUS_ACCEPTED ||
         $rev_status->getStatus() === DifferentialReviewerStatus::STATUS_ACCEPTED_OLDER) {
 
-        $reviewed_by_phid = $rev_status->getReviewerPHID();
+        $reviewed_by_phids[] = $rev_status->getReviewerPHID();
       }
     }
     $phids = $revision->getReviewers();
     $phids[] = $author_phid;
-    $phids[] = $reviewed_by_phid;
     $objects = id(new PhabricatorPeopleQuery())
         ->setViewer($viewer)
         ->withPHIDs($phids)
@@ -139,8 +138,10 @@ class DifferentialGetCommitDataConduitAPIMethod
 
       if ($phid == $author_phid) {
         $data['author'] = array('name' => $name, 'username' => $username, 'email' => $email);
-      } else if ($phid == $reviewed_by_phid) {
-        $data['reviewedBy'] = array('name' => $name, 'username' => $username, 'email' => $email);
+      } else if (in_array($phid, $reviewed_by_phids)) {
+        $reviewedBy = array('name' => $name, 'username' => $username, 'email' => $email);
+        $data['reviewedBy'] = $reviewedBy; // Legacy
+        $data['accept_reviewers'][] = $reviewedBy;
       } else {
         $data['reviewers'][] = array('name' => $name, 'username' => $username, 'email' => $email);
       }
