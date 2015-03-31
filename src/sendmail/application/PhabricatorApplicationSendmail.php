@@ -9,6 +9,10 @@ final class PhabricatorApplicationSendmail extends PhabricatorApplication {
     return true;
   }
 
+  public function getName() {
+    return 'SendMail';
+  }
+
   public function getBaseURI() {
     return '/sendmail/';
   }
