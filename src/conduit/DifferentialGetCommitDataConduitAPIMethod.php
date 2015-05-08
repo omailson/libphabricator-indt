@@ -105,6 +105,18 @@ class DifferentialGetCommitDataConduitAPIMethod
         ->needPrimaryEmail(true)
         ->execute();
 
+    $author_emails = id(new PhabricatorUserEmail())->loadAllWhere(
+        'userPHID = %s',
+        $author_phid);
+    $author_emails = mpull($author_emails, 'getAddress');
+
+    $reviewers_emails = [];
+    foreach ($revision->getReviewers() as $reviewer_phid) {
+      $reviewers_emails[$reviewer_phid] = id(new PhabricatorUserEmail())->loadAllWhere(
+          'userPHID = %s',
+          $reviewer_phid);
+      $reviewers_emails[$reviewer_phid] = mpull($reviewers_emails[$reviewer_phid], 'getAddress');
+    }
     // Returned data
     $data = array();
 
@@ -137,13 +149,13 @@ class DifferentialGetCommitDataConduitAPIMethod
         $email = $email->getAddress();
 
       if ($phid == $author_phid) {
-        $data['author'] = array('name' => $name, 'username' => $username, 'email' => $email);
+        $data['author'] = array('name' => $name, 'username' => $username, 'email' => $email, 'emails' => $author_emails);
       } else if (in_array($phid, $reviewed_by_phids)) {
-        $reviewedBy = array('name' => $name, 'username' => $username, 'email' => $email);
+        $reviewedBy = array('name' => $name, 'username' => $username, 'email' => $email, 'emails' => $reviewers_emails[$phid]);
         $data['reviewedBy'] = $reviewedBy; // Legacy
         $data['accept_reviewers'][] = $reviewedBy;
       } else {
-        $data['reviewers'][] = array('name' => $name, 'username' => $username, 'email' => $email);
+        $data['reviewers'][] = array('name' => $name, 'username' => $username, 'email' => $email, 'emails' => $reviewers_emails[$phid]);
       }
     }
 
