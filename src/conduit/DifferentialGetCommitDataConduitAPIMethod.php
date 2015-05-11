@@ -140,6 +140,7 @@ class DifferentialGetCommitDataConduitAPIMethod
     $data['author'] = null;
     $data['reviewedBy'] = null;
     $data['reviewers'] = array();
+    $data['accept_reviewers'] = array();
     foreach ($objects as $user) {
       $phid = $user->getPHID();
       $name = $user->getRealName();
